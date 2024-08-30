@@ -12,7 +12,7 @@ public class ClientImpl implements ClientInterface {
     
     public void start() {
         String hostM = "127.0.0.1";
-        String hostDB = "127.0.0.1";
+        String hostDB = "127.0.0.1~";
 
         final int DATABASE_SERVER_PORT = 8002;
         final int MATRIX_SERVER_PORT = 8001;
