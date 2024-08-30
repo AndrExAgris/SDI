@@ -14,75 +14,90 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Arrays;
 
-public class ServerDatabase implements IDatabase{
-  public ServerDatabase() {}
+public class ServerDatabase implements IDatabase {
 
-   public static void main(String[] args) {
-      try {
-         // Instancia o objeto servidor e a sua stub
-         ServerDatabase server = new ServerDatabase();
-         IDatabase stub = (IDatabase) UnicastRemoteObject.exportObject(server, 0);
-         // Registra a stub no RMI Registry para que ela seja obtAida pelos clientes
-         Registry registry = LocateRegistry.createRegistry(6660);
-         //Registry registry = LocateRegistry.getRegistry(9999);
-         registry.bind("database_service", stub);
-         System.out.println("Servidor pronto");
-      } catch (Exception ex) {
-         ex.printStackTrace();
+  public static void main(String[] args) {
+    final int DATABASE_SERVER_PORT = 8002;
+
+    try {
+      // Instanciamento do objeto servidor e seu stub
+      ServerDatabase server = new ServerDatabase();
+      IDatabase stub = (IDatabase) UnicastRemoteObject.exportObject(server, 0);
+      // Registro do stub no RMI Registry para que esteja visível a clientes
+      Registry registry = LocateRegistry.createRegistry(DATABASE_SERVER_PORT);
+      registry.bind("database_service", stub);
+      System.out.println("Servidor pronto e escutando na porta " + DATABASE_SERVER_PORT);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  public void save(double[][] a, String filename) throws RemoteException {
+    try {
+      BufferedWriter outputBufferedWriter = new BufferedWriter(new FileWriter(filename));
+      int rows = a.length;
+
+      for (int i = 0; i < rows; i++) {
+        outputBufferedWriter.write(Arrays.toString(a[i]));
+        outputBufferedWriter.newLine();
       }
-   }
 
-    
-    public void save(double[][] a, String filename) throws RemoteException {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename))) {
-            for (double[] row : a) {
-                for (int i = 0; i < row.length; i++) {
-                    writer.write(Double.toString(row[i]));
-                    if (i < row.length - 1) {
-                        writer.write(","); 
-                    }
-                }
-                writer.newLine(); 
-            }
-        } catch (IOException e) {
-            throw new RemoteException("Error saving data to file", e);
-        }
+      outputBufferedWriter.flush();
+      outputBufferedWriter.close();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
+  }
 
-    public double[][] load(String filename) throws RemoteException {
-        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
-            String line;
-            int rowCount = 0;
-            while ((line = reader.readLine()) != null) {
-                rowCount++;
-            }
-            double[][] result = new double[rowCount][];
-            
-            try (BufferedReader reader2 = new BufferedReader(new FileReader(filename))) {
-                int currentRow = 0;
-                while ((line = reader2.readLine()) != null) {
-                    String[] values = line.split(",");
-                    result[currentRow] = new double[values.length];
-                    for (int i = 0; i < values.length; i++) {
-                        result[currentRow][i] = Double.parseDouble(values[i]);
-                    }
-                    currentRow++;
-                }
-            }
+  public double[][] load(String filename) throws RemoteException {
+    try {
+      BufferedReader inputBufferedReader = new BufferedReader(new FileReader(filename));
+      String line;
+      double[][] matrix = null;
+      int row = 0;
 
-            return result;
-        } catch (IOException | NumberFormatException e) {
-            throw new RemoteException("Error loading data from file", e);
+      // Read first line to determine matrix dimensions
+      if ((line = inputBufferedReader.readLine()) != null) {
+        String[] firstRow = line.replace("[", "").replace("]", "").split(", ");
+        int cols = firstRow.length;
+        matrix = new double[1][cols];
+        for (int j = 0; j < cols; j++) {
+          matrix[0][j] = Double.parseDouble(firstRow[j]);
         }
-    }
+        row++;
+      }
 
-
-    public void remove(String filename) throws RemoteException {
-        File file = new File(filename);
-        if (!file.delete()) {
-            throw new RemoteException("Failed to delete the file");
+      // Read the remaining lines
+      while ((line = inputBufferedReader.readLine()) != null) {
+        String[] values = line.replace("[", "").replace("]", "").split(", ");
+        double[][] tempMatrix = new double[row + 1][values.length];
+        System.arraycopy(matrix, 0, tempMatrix, 0, row);
+        for (int j = 0; j < values.length; j++) {
+          tempMatrix[row][j] = Double.parseDouble(values[j]);
         }
+        matrix = tempMatrix;
+        row++;
+      }
+
+      inputBufferedReader.close();
+      return matrix;
+    } catch (IOException e) {
+      e.printStackTrace();
+      throw new RemoteException("Failed to load matrix from file.", e);
     }
+  }
+
+  public void remove(String filename) throws RemoteException {
+    File file = new File(filename);
+    if (file.exists()) {
+      if (!file.delete()) {
+        throw new RemoteException("Failed to delete the file.");
+      }
+    } else {
+      throw new RemoteException("File not found.");
+    }
+  }
 
 }
